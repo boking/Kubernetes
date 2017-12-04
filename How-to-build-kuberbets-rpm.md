@@ -1,0 +1,102 @@
+> 记录下创建kubernetes rpm包
+# 安装 build 所需依赖
+
+> # EPEL
+> yum install epel-release -y
+> # update 系统组件
+> yum update -y && yum upgrade -y
+> # 安装基本的编译依赖
+> yum install golang go-md2man go-bindata gcc bison git rpm-build vim -y
+> # 安装 gvm(用于 golang 版本管理)
+> bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)
+> source /root/.gvm/scripts/gvm
+> # 安装 1.8 之前需要先安装 1.4
+> gvm install go1.4 -B
+> gvm use go1.4
+> # 使用 golang 1.8 版本 build
+> gvm install go1.8
+> gvm use go1.8
+
+# 克隆 build 仓库
+
+# Fedora 官方 Kubernetes 仓库地址在 [这里](https://src.fedoraproject.org/cgit/rpms/kubernetes.git/)，如果有版本选择请自行区分
+> git clone https://src.fedoraproject.org/git/rpms/kubernetes.git
+
+# 从 spec 获取所需文件
+
+# 克隆好 build 仓库后首先查看 kubernetes.spec 文件，确定 build 所需文件，spec 文件如下
+
+# 省略...
+
+> %global provider                github
+> %global provider_tld            com
+> %global project                 kubernetes
+> %global repo                    kubernetes
+> # https://github.com/kubernetes/kubernetes
+>
+> %global provider_prefix         %{provider}.%{provider_tld}/%{project}/%{repo}
+> %global import_path             k8s.io/kubernetes
+> %global commit                  095136c3078ccf887b9034b7ce598a0a1faff769
+> %global shortcommit              %(c=%{commit}; echo ${c:0:7})
+>
+> %global con_provider            github
+> %global con_provider_tld        com
+> %global con_project             kubernetes
+> %global con_repo                contrib
+> # https://github.com/kubernetes/contrib
+> %global con_provider_prefix     %{con_provider}.%{con_provider_tld}/%{con_project}/%{con_repo}
+> %global con_commit              0f5b210313371ff769da24d8264f5a7869c5a3f3
+> %global con_shortcommit         %(c=%{con_commit}; echo ${c:0:7})
+>
+> %global kube_version            1.6.7
+> %global kube_git_version        v%{kube_version}
+>
+> # 省略...
+**从 spec 文件中可以看到 build 主要需要两个仓库的源码，一个是 kubernetes 主仓库，存放着主要的 build 源码；另一个是 contrib 仓库，存放着一些配置文件，如 systemd 配置等
+
+接下来从 spec 文件的 source 段中可以解读到(source0、source1)最终所需的两个仓库压缩文件名为 kubernetes-SHORTCOMMIT、contrib-SHORTCOMIT，source 段如下**
+
+> Name:           kubernetes
+> Version:        %{kube_version}
+> Release:        1%{?dist}
+> Summary:        Container cluster management
+> License:        ASL 2.0
+> URL:            https://%{import_path}
+> ExclusiveArch:  x86_64 aarch64 ppc64le s390x
+> Source0:        https://%{provider_prefix}/archive/%{commit}/%{repo}-%{shortcommit}.tar.gz
+> Source1:        https://%{con_provider_prefix}/archive/%{con_commit}/%{con_repo}-%{con_shortcommit}.tar.gz
+> Source3:        kubernetes-accounting.conf
+> Source4:        kubeadm.conf
+> Source33:       genmanpages.sh
+
+**build 一个最新的 1.7.0 的 rpm，所以从 github 获取到 commitID 为 d3ada0119e776222f11ec7945e6d860061339aad，contrib 仓库同理，不过 contrib 一般直接取 master 即可 7d344989fe6a3f11a6d84104b024a50960b021db；接下来首要任务是替换 spec 中原有的 版本号和 commitID 如下**
+
+> %global kube_version            1.7.0
+> %global con_commit              7d344989fe6a3f11a6d84104b024a50960b021db
+> %global commit                  d3ada0119e776222f11ec7945e6d860061339aad
+
+**准备源码**
+修改好文件以后，就可以下载源码文件了，源码下载不必去克隆 github 项目，直接从 spec 中给出的地址下载即可
+> cd kubernetes
+> wget https://github.com/kubernetes/kubernetes/archive/d3ada0119e776222f11ec7945e6d860061339aad/kubernetes-d3ada01.tar.gz
+> wget https://github.com/kubernetes/contrib/archive/7d344989fe6a3f11a6d84104b024a50960b021db/contrib-7d34498.tar.gz
+
+**build rpm**
+在正式开始 build 之前，还有一点需要注意的是 默认的 kubernetes.spec 文件中指定了该 rpm 依赖于 docker 这个包，在 CentOS 上可能我们会安装 docker-engine 或者 docker-ce，此时安装 kubernetes rpm 是无法安装的，因为他以来的包不存在，解决的办法就是编译之前删除 spec 文件中的 Requires: docker 即可，最后创建好 build 目录，并放置好源码文件开始 build 即可，当然 build 可以有不同选择
+
+> # 由于我是 root 用户，所以目录位置在这
+> # 实际生产 强烈不推荐使用 root build(操作失误会损毁宿主机)
+> # 我的是一台临时 vps，所以无所谓了
+> mkdir -p /root/rpmbuild/SOURCES/
+> mv ~/kubernetes/* /root/rpmbuild/SOURCES/
+> cd /root/rpmbuild/SOURCES/
+> # 执行 build
+> rpmbuild -ba kubernetes.spec
+
+**注意，由于我们选择的版本已经超出了仓库所支持的最大版本，所以有些 Patch 已经不再适用，如 spec 中的 Patch12、Patch19 会出错，所需要注释掉(%prep 段中也有一个)**
+
+rpmbuild 可选项有很多，常用的 3 个，可以根据自己实际需要进行 build:
+
+-ba : build 源码包+二进制包
+-bb : 只 build 二进制包
+-bs : 只 build 源码包
