@@ -1,4 +1,4 @@
- 记录下创建kubernetes rpm包
+记录下创建kubernetes rpm包
 # 安装 build 所需依赖
 
 # EPEL
@@ -50,9 +50,10 @@ git clone https://src.fedoraproject.org/git/rpms/kubernetes.git
 %global kube_git_version        v%{kube_version}
 
 # 省略...
-**从 spec 文件中可以看到 build 主要需要两个仓库的源码，一个是 kubernetes 主仓库，存放着主要的 build 源码；另一个是 contrib 仓库，存放着一些配置文件，如 systemd 配置等
 
-接下来从 spec 文件的 source 段中可以解读到(source0、source1)最终所需的两个仓库压缩文件名为 kubernetes-SHORTCOMMIT、contrib-SHORTCOMIT，source 段如下**
+从 spec 文件中可以看到 build 主要需要两个仓库的源码，一个是 kubernetes 主仓库，存放着主要的 build 源码；另一个是 contrib 仓库，存放着一些配置文件，如 systemd 配置等
+
+接下来从 spec 文件的 source 段中可以解读到(source0、source1)最终所需的两个仓库压缩文件名为 kubernetes-SHORTCOMMIT、contrib-SHORTCOMIT，source 段如下
 
 Name:           kubernetes
 Version:        %{kube_version}
@@ -67,7 +68,7 @@ Source3:        kubernetes-accounting.conf
 Source4:        kubeadm.conf
 Source33:       genmanpages.sh
 
-**build 一个最新的 1.7.0 的 rpm，所以从 github 获取到 commitID 为 d3ada0119e776222f11ec7945e6d860061339aad，contrib 仓库同理，不过 contrib 一般直接取 master 即可 7d344989fe6a3f11a6d84104b024a50960b021db；接下来首要任务是替换 spec 中原有的 版本号和 commitID 如下**
+build 一个最新的 1.7.0 的 rpm，所以从 github 获取到 commitID 为 d3ada0119e776222f11ec7945e6d860061339aad，contrib 仓库同理，不过 contrib 一般直接取 master 即可 7d344989fe6a3f11a6d84104b024a50960b021db；接下来首要任务是替换 spec 中原有的 版本号和 commitID 如下
 
 %global kube_version            1.7.0
 %global con_commit              7d344989fe6a3f11a6d84104b024a50960b021db
@@ -83,7 +84,6 @@ wget https://github.com/kubernetes/contrib/archive/7d344989fe6a3f11a6d84104b024a
 在正式开始 build 之前，还有一点需要注意的是 默认的 kubernetes.spec 文件中指定了该 rpm 依赖于 docker 这个包，在 CentOS 上可能我们会安装 docker-engine 或者 docker-ce，此时安装 kubernetes rpm 是无法安装的，因为他以来的包不存在，解决的办法就是编译之前删除 spec 文件中的 Requires: docker 即可，最后创建好 build 目录，并放置好源码文件开始 build 即可，当然 build 可以有不同选择
 
 # 实际生产 强烈不推荐使用 root build(操作失误会损毁宿主机)
-# 我的是一台临时 vps，所以无所谓了
 mkdir -p /root/rpmbuild/SOURCES/
 mv ~/kubernetes/* /root/rpmbuild/SOURCES/
 cd /root/rpmbuild/SOURCES/
