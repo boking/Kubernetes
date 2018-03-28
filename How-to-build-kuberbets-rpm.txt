@@ -7,6 +7,9 @@ yum install epel-release -y
 yum update -y && yum upgrade -y
 # 安装基本的编译依赖
 yum install golang go-md2man go-bindata gcc bison git rpm-build vim -y
+
+# https://cbs.centos.org/koji/buildinfo?buildID=944
+go-bindata 可以从这个地址下载
 # 安装 gvm(用于 golang 版本管理)
 bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)
 source /root/.gvm/scripts/gvm
